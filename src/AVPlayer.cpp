@@ -25,6 +25,7 @@
 #include <QFileDialog>
 
 #include <QtAV/AVDemuxer.h>
+#include <QtAV/AOOpenAL.h>
 #include <QtAV/AOPortAudio.h>
 #include <QtAV/AudioThread.h>
 #include <QtAV/Packet.h>
@@ -62,7 +63,7 @@ AVPlayer::AVPlayer(QObject *parent) :
     connect(qApp, SIGNAL(aboutToQuit()), SLOT(stop()));
     avTimerId = -1;
     clock = new AVClock(AVClock::AudioClock);
-    audio = new AOPortAudio();
+    audio = new AOOpenAL();
     audio_dec = new AudioDecoder();
     audio_thread = new AudioThread(this);
     audio_thread->setClock(clock);

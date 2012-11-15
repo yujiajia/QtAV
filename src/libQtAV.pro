@@ -20,6 +20,7 @@ else:win32: SOURCES +=
 
 SOURCES += \
     QtAV_Compat.cpp \
+    AOOpenAL.cpp \
     AOPortAudio.cpp \
     AudioThread.cpp \
     AVThread.cpp \
@@ -45,7 +46,9 @@ HEADERS += \
     QtAV/QtAV_Compat.h \
     QtAV/AVThread.h \
     QtAV/AudioThread.h \
+    QtAV/AOOpenAL.h \
     QtAV/AOPortAudio.h \
+    QtAV/private/AOOpenAL_p.h \
     QtAV/private/AOPortAudio_p.h \
     QtAV/private/AudioOutput_p.h \
     QtAV/private/AVThread_p.h \
@@ -71,4 +74,5 @@ HEADERS += \
     QtAV/AVClock.h \
     QtAV/VideoDecoder.h \
     QtAV/VideoThread.h
+
 
