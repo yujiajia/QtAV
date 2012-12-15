@@ -143,11 +143,13 @@ AVClock* AVDemuxer::clock() const
 	return master_clock;
 }
 
+
 //TODO: seek by byte
 void AVDemuxer::seek(qreal q)
 {
     if (!a_codec_context || !v_codec_context || !format_context)
         return;
+    qDebug("%d %f", __LINE__, q);
     QMutexLocker lock(&mutex);
     Q_UNUSED(lock);
     q = qMax<qreal>(0.0, q);
@@ -160,19 +162,31 @@ void AVDemuxer::seek(qreal q)
     qDebug("[AVDemuxer] seek to %f %f %lld / %lld", q, pkt->pts, (int64_t)(t*AV_TIME_BASE), duration());
 #else
     //t: unit is us (10^-6 s, AV_TIME_BASE)
-    int64_t t = int64_t(q*duration());///AV_TIME_BASE;
+    int64_t t = int64_t(q*duration());///AV_TIME_BASE
     //TODO: pkt->pts may be 0, compute manually. Check wether exceed the length
     if (t >= duration())
         return;
+    int seek_stream = -1;
+
+    /*if (video_stream >= 0)
+        seek_stream = video_stream;
+    else if (audio_stream >= 0)
+        seek_stream = audio_stream;*/
+    //if (seek_stream >= 0)
+    //    t = av_rescale_q(t, AV_TIME_BASE_Q, format_context->streams[seek_stream]->time_base);
     bool backward = t <= (int64_t)(pkt->pts*AV_TIME_BASE);
     qDebug("[AVDemuxer] seek to %f %f %lld / %lld backward=%d", q, pkt->pts, t, duration(), backward);
-	//AVSEEK_FLAG_BACKWARD has no effect? because we know the timestamp
-	int seek_flag =  (backward ? 0 : AVSEEK_FLAG_BACKWARD); //AVSEEK_FLAG_ANY
-	int ret = av_seek_frame(format_context, -1, t, seek_flag);
+    //AVSEEK_FLAG_BACKWARD: the most closed key frame before/at the timestamp
+    int seek_flag =  (backward ? 0 : AVSEEK_FLAG_BACKWARD); //AVSEEK_FLAG_ANY
+    int ret = av_seek_frame(format_context, seek_stream, t, seek_flag);
 #endif
-    if (ret < 0)
+    if (ret < 0) {
         qDebug("[AVDemuxer] seek error: %s", av_err2str(ret));
     //calc pts
+        return;
+    }
+    avcodec_flush_buffers(videoCodecContext());
+    avcodec_flush_buffers(audioCodecContext());
 }
 
 /*
@@ -187,7 +201,7 @@ void AVDemuxer::seekForward()
 	double pts = pkt->pts;
 	if (master_clock)
 		pts = master_clock->value();
-	double q = (double)((pts + 8)*AV_TIME_BASE)/(double)duration();
+    double q = (double)((pts + 18)*AV_TIME_BASE)/(double)duration();
     seek(q);
 }
 
@@ -198,7 +212,7 @@ void AVDemuxer::seekBackward()
 	double pts = pkt->pts;
 	if (master_clock)
 		pts = master_clock->value();
-	double q = (double)((pts - 8)*AV_TIME_BASE)/(double)duration();
+    double q = (double)((pts - 18)*AV_TIME_BASE)/(double)duration();
     seek(q);
 }
 
