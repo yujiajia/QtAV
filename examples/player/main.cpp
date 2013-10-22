@@ -152,7 +152,6 @@ int main(int argc, char *argv[])
         renderer->osdFilter()->setShowType(OSD::ShowNone);
     //renderer->scaleInRenderer(false);
     renderer->setOutAspectRatioMode(VideoRenderer::VideoAspectRatio);
-
     MainWindow window;
     window.show();
     window.setWindowTitle(title);

@@ -103,31 +103,38 @@ void VideoThread::run()
     bool need_update_vo_parameters = true;
     QSize dec_size_last;
     while (!d.stop) {
+        qDebug("v new loop");
         processNextTask();
         //TODO: why put it at the end of loop then playNextFrame() not work?
         //processNextTask tryPause(timeout) and  and continue outter loop
         if (tryPause()) { //DO NOT continue, or playNextFrame() will fail
-            if (d.stop)
-                break; //the queue is empty and may block. should setBlocking(false) wake up cond empty?
+
         } else {
             if (isPaused())
                 continue; //timeout. process pending tasks
         }
+        qDebug("v bf lock");
+        if (d.stop)
+            break; //the queue is empty and may block. should setBlocking(false) wake up cond empty?
         QMutexLocker locker(&d.mutex);
         Q_UNUSED(locker);
+        qDebug("v at lock");
         if (d.packets.isEmpty() && !d.stop) {
             d.stop = d.demux_end;
-            if (d.stop) {
-                qDebug("video queue empty and demux end. break video thread");
-                break;
-            }
+            qDebug("video queue empty");
+
         }
+        if (d.stop) {
+            qDebug("stop bf take");
+            break;
+        }
+        qDebug("v bf take");
         Packet pkt = d.packets.take(); //wait to dequeue
         //Compare to the clock
         if (!pkt.isValid()) {
             qDebug("Invalid packet! flush video codec context!!!!!!!!!!");
             dec->flush();
-            continue;
+            //continue;
         }
         d.delay = pkt.pts  - d.clock->value();
         /*
@@ -137,13 +144,20 @@ void VideoThread::run()
          * 2. use last delay when seeking
         */
         if (qAbs(d.delay) < 2.718) {
-            if (d.delay > kSyncThreshold) { //Slow down
-                //d.delay_cond.wait(&d.mutex, d.delay*1000); //replay may fail. why?
-                //qDebug("~~~~~wating for %f msecs", d.delay*1000);
-                usleep(d.delay * 1000000);
-            } else if (d.delay < -kSyncThreshold) { //Speed up. drop frame?
+            if (d.delay < -kSyncThreshold) { //Speed up. drop frame?
                 //continue;
             }
+            while (d.delay > 0.2) {//kSyncThreshold) { //Slow down
+                //d.delay_cond.wait(&d.mutex, d.delay*1000); //replay may fail. why?
+                //qDebug("~~~~~wating for %f msecs", d.delay*1000);
+                usleep(0.2 * 1000000UL);
+                if (d.stop)
+                    d.delay = 0;
+                else
+                    d.delay -= 0.2;
+            }
+            if (d.delay > 0)
+                usleep(d.delay * 1000000UL);
         } else { //when to drop off?
             qDebug("delay %f/%f", d.delay, d.clock->value());
             if (d.delay > 0) {
@@ -175,6 +189,11 @@ void VideoThread::run()
                 need_update_vo_parameters = false;
             }
             foreach(AVOutput *out, d.update_outputs) {
+                if (d.stop) {
+                    qDebug("stop in outputs");
+                    break;
+                }
+
                 VideoRenderer *vo = static_cast<VideoRenderer*>(out);
                 vo->setInSize(dec->width(), dec->height()); //setLastSize(). optimize: set only when changed
             }
@@ -185,6 +204,8 @@ void VideoThread::run()
         dec_size_last = QSize(dec->width(), dec->height());
 
 #endif //V1_2
+        qDebug("v bf decode");
+
         //still decode, we may need capture. TODO: decode only if existing a capture request if no vo
         if (dec->decode(pkt.data)) {
             d.pts = pkt.pts;
@@ -202,6 +223,10 @@ void VideoThread::run()
                 d.statistics->video.current_time = QTime(0, 0, 0).addMSecs(int(pkt.pts * 1000.0)); //TODO: is it expensive?
                 if (!d.filters.isEmpty()) {
                     foreach (Filter *filter, d.filters) {
+                        if (d.stop) {
+                            qDebug("stop in filters");
+                            break;
+                        }
                         filter->process(d.filter_context, d.statistics, &data);
                     }
                 }
@@ -213,11 +238,19 @@ void VideoThread::run()
 #else
             //while can pause, processNextTask, not call outset.puase which is deperecated
             while (d.outputSet->canPauseThread()) {
+                if (d.stop) {
+                    qDebug("stop in outputset");
+                    break;
+                }
                 d.outputSet->pauseThread(100);
                 //tryPause(100);
                 processNextTask();
             }
 
+            if (d.stop) {
+                qDebug("stop bf senddata");
+                break;
+            }
             d.outputSet->sendData(data);
 #endif //V1_2
         }

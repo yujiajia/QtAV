@@ -73,6 +73,7 @@ public Q_SLOTS:
     void togglePause();
     void stop();
     void nextFrame();
+    void seek(int position);
     void seek(qreal position);
     void seekForward();
     void seekBackward();

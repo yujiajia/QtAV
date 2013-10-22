@@ -1,3 +1,8 @@
+greaterThan(QT_MAJOR_VERSION, 4) {
+  CONFIG += tests_need_tools
+  load(qt_parts)
+}
+
 TEMPLATE = subdirs
 CONFIG -= ordered
 SUBDIRS = libqtav examples tests

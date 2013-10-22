@@ -69,6 +69,8 @@ void AudioThread::run()
     bool is_external_clock = d.clock->clockType() == AVClock::ExternalClock;
     Packet pkt;
     while (!d.stop) {
+        qDebug("a new loop");
+
         processNextTask();
         //TODO: why put it at the end of loop then playNextFrame() not work?
         if (tryPause()) { //DO NOT continue, or playNextFrame() will fail
@@ -78,14 +80,17 @@ void AudioThread::run()
             if (isPaused())
                 continue;
         }
+        qDebug("a bf lock");
+
         QMutexLocker locker(&d.mutex);
         Q_UNUSED(locker);
         if (d.packets.isEmpty() && !d.stop) {
             d.stop = d.demux_end;
-            if (d.stop) {
-                qDebug("audio queue empty and demux end. break audio thread");
-                break;
-            }
+            qDebug("audio queue empty");
+        }
+        if (d.stop) {
+            qDebug("a stop bf take");
+            break;
         }
         if (!pkt.isValid()) {
             pkt = d.packets.take(); //wait to dequeue
@@ -104,13 +109,20 @@ void AudioThread::run()
              * 2. use last delay when seeking
             */
             if (qAbs(d.delay) < 2.718) {
-                if (d.delay > kSyncThreshold) { //Slow down
-                    //d.delay_cond.wait(&d.mutex, d.delay*1000); //replay may fail. why?
-                    //qDebug("~~~~~wating for %f msecs", d.delay*1000);
-                    usleep(d.delay * 1000000);
-                } else if (d.delay < -kSyncThreshold) { //Speed up. drop frame?
+                if (d.delay < -kSyncThreshold) { //Speed up. drop frame?
                     //continue;
                 }
+                while (d.delay > 0.2) {//kSyncThreshold) { //Slow down
+                    //d.delay_cond.wait(&d.mutex, d.delay*1000); //replay may fail. why?
+                    //qDebug("~~~~~wating for %f msecs", d.delay*1000);
+                    usleep(0.2 * 1000000UL);
+                    if (d.stop)
+                        d.delay = 0;
+                    else
+                        d.delay -= 0.2;
+                }
+                if (d.delay > 0)
+                    usleep(d.delay * 1000000UL);
             } else { //when to drop off?
                 qDebug("delay %f/%f", d.delay, d.clock->value());
                 if (d.delay > 0) {
@@ -141,6 +153,11 @@ void AudioThread::run()
                 }
             }
         }
+        if (d.stop) {
+            qDebug("a stop bf decode");
+            break;
+        }
+        qDebug("a bf dec");
         if (dec->decode(pkt.data)) {
             QByteArray decoded(dec->data());
             int decodedSize = decoded.size();
@@ -150,6 +167,10 @@ void AudioThread::run()
             AudioFormat &af = dec->resampler()->inAudioFormat();
             qreal byte_rate = af.bytesPerSecond();
             while (decodedSize > 0) {
+                if (d.stop) {
+                    qDebug("a stop in decode");
+                    break;
+                }
                 int chunk = qMin(decodedSize, int(max_len*byte_rate));
                 qreal chunk_delay = (qreal)chunk/(qreal)byte_rate;
                 pkt.pts += chunk_delay;

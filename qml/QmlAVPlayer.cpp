@@ -173,6 +173,11 @@ void QmlAVPlayer::nextFrame()
     mpPlayer->playNextFrame();
 }
 
+void QmlAVPlayer::seek(int position)
+{
+    mpPlayer->seek(qreal(position)/qreal(duration()));
+}
+
 void QmlAVPlayer::seek(qreal position)
 {
     mpPlayer->seek(position);

@@ -111,14 +111,17 @@ void AVThread::scheduleTask(QRunnable *task)
 // TODO: shall we close decoder here?
 void AVThread::stop()
 {
-    pause(false);
     DPTR_D(AVThread);
-    if (d.writer)
-        d.writer->pause(false); //stop waiting
-    d.stop = true;
-    //terminate();
+    QMutexLocker locker(&d.mutex);
+    Q_UNUSED(locker);
     d.packets.setBlocking(false); //stop blocking take()
     d.packets.clear();
+    d.stop = true;
+    pause(false);
+    if (d.writer)
+        d.writer->pause(false); //stop waiting
+    //terminate();
+
 }
 
 //TODO: output set
